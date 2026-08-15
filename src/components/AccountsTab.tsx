@@ -1,6 +1,8 @@
-import { Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Sparkles, Trash2 } from 'lucide-react';
 import type { Account, CategoryId } from '../types';
 import { CATEGORIES, catById } from '../lib/categories';
+import { estimateGrowthRate } from '../lib/growthEstimates';
 import { Card, Field, inputClass } from './ui';
 
 interface Props {
@@ -22,6 +24,26 @@ export function AccountsTab({
   setConfirmReset,
   resetAll,
 }: Props) {
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+
+  // Manual edits invalidate any previously shown suggestion reason, so the
+  // note never lingers next to a number the person has since changed.
+  const editField = (id: string, patch: Partial<Account>) => {
+    updateAccount(id, patch);
+    setReasons((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const suggestRate = (a: Account) => {
+    const { rate, reason } = estimateGrowthRate(a.category, a.name);
+    updateAccount(a.id, { rate });
+    setReasons((prev) => ({ ...prev, [a.id]: reason }));
+  };
+
   return (
     <Card>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -66,7 +88,7 @@ export function AccountsTab({
               <Field label="Name">
                 <input
                   value={a.name}
-                  onChange={(e) => updateAccount(a.id, { name: e.target.value })}
+                  onChange={(e) => editField(a.id, { name: e.target.value })}
                   placeholder="e.g. Fidelity brokerage"
                   className={inputClass}
                 />
@@ -77,7 +99,7 @@ export function AccountsTab({
                 value={a.category}
                 onChange={(e) => {
                   const category = e.target.value as CategoryId;
-                  updateAccount(a.id, { category, rate: catById(category).rate });
+                  editField(a.id, { category, rate: catById(category).rate });
                 }}
                 className={inputClass}
               >
@@ -92,7 +114,7 @@ export function AccountsTab({
               <input
                 type="number"
                 value={a.balance}
-                onChange={(e) => updateAccount(a.id, { balance: e.target.value === '' ? 0 : Number(e.target.value) })}
+                onChange={(e) => editField(a.id, { balance: e.target.value === '' ? 0 : Number(e.target.value) })}
                 className={`${inputClass} tabular-nums`}
               />
             </Field>
@@ -101,20 +123,30 @@ export function AccountsTab({
                 type="number"
                 value={a.monthlyContribution}
                 onChange={(e) =>
-                  updateAccount(a.id, { monthlyContribution: e.target.value === '' ? 0 : Number(e.target.value) })
+                  editField(a.id, { monthlyContribution: e.target.value === '' ? 0 : Number(e.target.value) })
                 }
                 className={`${inputClass} tabular-nums`}
               />
             </Field>
             <div className="flex gap-2 items-end">
               <Field label="Growth %/yr">
-                <input
-                  type="number"
-                  step="0.1"
-                  value={a.rate}
-                  onChange={(e) => updateAccount(a.id, { rate: e.target.value === '' ? 0 : Number(e.target.value) })}
-                  className={`${inputClass} tabular-nums`}
-                />
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={a.rate}
+                    onChange={(e) => editField(a.id, { rate: e.target.value === '' ? 0 : Number(e.target.value) })}
+                    className={`${inputClass} tabular-nums`}
+                  />
+                  <button
+                    onClick={() => suggestRate(a)}
+                    title="Get an AI-suggested estimate based on this account's category and name"
+                    className="p-1.5 rounded-lg text-ledger-gold shrink-0"
+                    aria-label="Suggest a growth rate"
+                  >
+                    <Sparkles size={15} />
+                  </button>
+                </div>
               </Field>
               <button
                 onClick={() => removeAccount(a.id)}
@@ -124,6 +156,12 @@ export function AccountsTab({
                 <Trash2 size={16} />
               </button>
             </div>
+            {reasons[a.id] && (
+              <div className="col-span-2 sm:col-span-6 -mt-1 flex items-start gap-1.5 text-xs text-ledger-textFaint">
+                <Sparkles size={12} className="mt-0.5 shrink-0 text-ledger-gold" />
+                {reasons[a.id]}
+              </div>
+            )}
           </div>
         ))}
         {accounts.length === 0 && (
@@ -132,7 +170,7 @@ export function AccountsTab({
       </div>
       <p className="text-xs mt-4 text-ledger-textFaint">
         Growth rate defaults to a typical long-run figure for the category — edit it to match your own accounts or
-        expectations.
+        expectations, or click the sparkle icon for a more tailored estimate based on the account's name.
       </p>
     </Card>
   );

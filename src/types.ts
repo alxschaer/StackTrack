@@ -39,3 +39,33 @@ export interface ProjectionPoint {
   real: number;
   [categoryId: string]: number;
 }
+
+export interface StockPickTemplate {
+  ticker: string;
+  name: string;
+  rationale: string;
+}
+
+export interface StockBatchTemplate {
+  id: string;
+  theme: string;
+  picks: StockPickTemplate[];
+}
+
+export interface TrackedPick {
+  ticker: string;
+  name: string;
+  rationale: string;
+  allocation: number;
+  entryPrice: number | null;
+  currentPrice: number | null;
+  lastUpdated: string | null;
+}
+
+export interface TrackedBatch {
+  id: string;
+  theme: string;
+  date: string;
+  totalInvested: number;
+  picks: TrackedPick[];
+}

@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Landmark, Plus, TrendingUp, Wallet } from 'lucide-react';
-import type { Account, Settings } from './types';
+import { Landmark, Plus, Sparkles, TrendingUp, Wallet } from 'lucide-react';
+import type { Account, Settings, TrackedBatch } from './types';
 import { computeProjection, solveRequiredMonthly } from './lib/projections';
-import { loadLedgerState, saveLedgerState, clearLedgerState } from './lib/storage';
+import { loadLedgerState, saveLedgerState, clearLedgerState, loadInvestingState, saveInvestingState } from './lib/storage';
 import { fmt0 } from './lib/format';
+import { APP_VERSION } from './lib/version';
+import { fetchQuote } from './lib/market';
+import { CURATED_BATCHES } from './lib/curatedPicks';
 import { TabButton, Card } from './components/ui';
 import { OverviewTab } from './components/OverviewTab';
 import { AccountsTab } from './components/AccountsTab';
 import { ProjectionsTab } from './components/ProjectionsTab';
 import { RetirementTab } from './components/RetirementTab';
+import { AIInvestingTab } from './components/AIInvestingTab';
 import { catById } from './lib/categories';
 
 const DEFAULT_SETTINGS: Settings = {
@@ -22,7 +26,7 @@ const DEFAULT_SETTINGS: Settings = {
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-type Tab = 'overview' | 'accounts' | 'projections' | 'retirement';
+type Tab = 'overview' | 'accounts' | 'projections' | 'retirement' | 'investing';
 
 export default function App() {
   const initial = useRef(loadLedgerState());
@@ -34,6 +38,14 @@ export default function App() {
   const [horizon, setHorizon] = useState(30);
   const saveTimer = useRef<number | undefined>(undefined);
   const firstRender = useRef(true);
+
+  const initialInvesting = useRef(loadInvestingState());
+  const [apiKey, setApiKey] = useState(initialInvesting.current?.apiKey ?? '');
+  const [batches, setBatches] = useState<TrackedBatch[]>(initialInvesting.current?.batches ?? []);
+  const [refreshingPrices, setRefreshingPrices] = useState(false);
+  const [addingBatchId, setAddingBatchId] = useState<string | null>(null);
+  const investingSaveTimer = useRef<number | undefined>(undefined);
+  const firstInvestingRender = useRef(true);
 
   // Debounced autosave to localStorage. Skip the very first render so we
   // don't immediately rewrite the state we just loaded.
@@ -49,6 +61,18 @@ export default function App() {
     }, 500);
     return () => window.clearTimeout(saveTimer.current);
   }, [accounts, settings]);
+
+  useEffect(() => {
+    if (firstInvestingRender.current) {
+      firstInvestingRender.current = false;
+      return;
+    }
+    if (investingSaveTimer.current) window.clearTimeout(investingSaveTimer.current);
+    investingSaveTimer.current = window.setTimeout(() => {
+      saveInvestingState({ apiKey, batches });
+    }, 500);
+    return () => window.clearTimeout(investingSaveTimer.current);
+  }, [apiKey, batches]);
 
   const totalNetWorth = useMemo(() => accounts.reduce((s, a) => s + (Number(a.balance) || 0), 0), [accounts]);
   const monthlyContribTotal = useMemo(
@@ -103,6 +127,69 @@ export default function App() {
     setConfirmReset(false);
   };
 
+  const addBatch = async (templateId: string, totalAmount: number) => {
+    const template = CURATED_BATCHES.find((t) => t.id === templateId);
+    if (!template || totalAmount <= 0) return;
+    setAddingBatchId(templateId);
+    const allocation = totalAmount / template.picks.length;
+
+    const picks = await Promise.all(
+      template.picks.map(async (p) => {
+        let price: number | null = null;
+        if (apiKey.trim()) {
+          try {
+            price = (await fetchQuote(p.ticker, apiKey.trim())).price;
+          } catch {
+            price = null; // leave blank rather than block adding the batch
+          }
+        }
+        return {
+          ticker: p.ticker,
+          name: p.name,
+          rationale: p.rationale,
+          allocation,
+          entryPrice: price,
+          currentPrice: price,
+          lastUpdated: price !== null ? new Date().toISOString() : null,
+        };
+      })
+    );
+
+    setBatches((prev) => [
+      ...prev,
+      { id: uid(), theme: template.theme, date: new Date().toISOString(), totalInvested: totalAmount, picks },
+    ]);
+    setAddingBatchId(null);
+  };
+
+  const removeBatch = (id: string) => setBatches((prev) => prev.filter((b) => b.id !== id));
+
+  const refreshPrices = async () => {
+    if (!apiKey.trim()) return;
+    setRefreshingPrices(true);
+    const key = apiKey.trim();
+    try {
+      const updated = await Promise.all(
+        batches.map(async (b) => ({
+          ...b,
+          picks: await Promise.all(
+            b.picks.map(async (p) => {
+              try {
+                const { price } = await fetchQuote(p.ticker, key);
+                return { ...p, currentPrice: price, lastUpdated: new Date().toISOString() };
+              } catch {
+                return p; // keep the last known price if this one fetch fails
+              }
+            })
+          ),
+        }))
+      );
+      setBatches(updated);
+    } finally {
+      setRefreshingPrices(false);
+    }
+  };
+
   return (
     <div className="min-h-screen font-body">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
@@ -110,7 +197,8 @@ export default function App() {
           <div>
             <div className="flex items-center gap-2 text-ledger-gold">
               <Landmark size={20} />
-              <h1 className="font-display text-2xl sm:text-3xl text-ledger-text">Ledger</h1>
+              <h1 className="font-display text-2xl sm:text-3xl text-ledger-text">StackTrack</h1>
+              <span className="text-xs text-ledger-textFaint self-end mb-1 tabular-nums">v{APP_VERSION}</span>
             </div>
             <p className="text-sm mt-1 text-ledger-textSoft">Your net worth, growth, and retirement runway — in one place.</p>
           </div>
@@ -139,6 +227,9 @@ export default function App() {
           </TabButton>
           <TabButton active={tab === 'retirement'} onClick={() => setTab('retirement')} icon={Landmark}>
             Retirement
+          </TabButton>
+          <TabButton active={tab === 'investing'} onClick={() => setTab('investing')} icon={Sparkles}>
+            AI Investing
           </TabButton>
         </div>
 
@@ -199,9 +290,22 @@ export default function App() {
           />
         )}
 
+        {tab === 'investing' && (
+          <AIInvestingTab
+            apiKey={apiKey}
+            setApiKey={setApiKey}
+            batches={batches}
+            addBatch={addBatch}
+            removeBatch={removeBatch}
+            refreshPrices={refreshPrices}
+            refreshing={refreshingPrices}
+            addingBatchId={addingBatchId}
+          />
+        )}
+
         <p className="text-xs mt-8 text-center text-ledger-textFaint">
-          Projections are estimates based on the growth rates you enter — actual markets are far less smooth. Not
-          financial advice.
+          Projections are estimates based on the growth rates you enter — actual markets are far less smooth. AI
+          Investing picks are illustrative, not personalized recommendations. Nothing here is financial advice.
         </p>
       </div>
     </div>

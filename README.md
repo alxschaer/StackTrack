@@ -1,4 +1,4 @@
-# Ledger
+# StackTrack
 
 A personal finance dashboard for tracking net worth across accounts —
 checking, savings, individual stocks, index funds, crypto, retirement
@@ -26,9 +26,35 @@ retirement, in inflation-adjusted dollars.
   whether you're on track and, if not, roughly how much more you'd need to
   save monthly to close the gap, solved directly from the future-value-of-an-annuity
   formula.
+- **AI Investing** — a small paper-trading tracker seeded with curated,
+  illustrative stock picks (grouped by AI-relevant theme). Choose an amount,
+  track a batch, and optionally pull live prices via a free
+  [Finnhub](https://finnhub.io/register) API key to see how it's doing.
+  Not financial advice.
 - **Local-first persistence** — all data is saved to `localStorage` in your
   own browser. Nothing is sent to a server; there's no backend and no
   account to create.
+
+### A note on the Finnhub API key
+
+The AI Investing tab's live prices are fetched directly from the browser,
+since this project intentionally has no backend. That means whatever
+Finnhub key you enter is visible in this site's network requests to anyone
+who opens dev tools — the same trade-off as any client-only app calling a
+keyed API. It's never bundled into the built site or committed to the repo;
+each visitor pastes in their own free key, stored only in their own
+browser's `localStorage`. If you want it hidden instead, the standard fix is
+a small serverless function that holds the key server-side and proxies the
+request — a good next step if this ever needs to be more than a demo.
+
+**On cost:** Finnhub's free tier is $0/month, requires no credit card to
+sign up, and allows ~60 requests/minute — this app only calls it when you
+click "Track this batch" or "Refresh prices," never automatically or in a
+loop, so normal use stays far under that limit. Since no payment method is
+on file, there's no way for Finnhub to charge anything even if that limit
+were somehow exceeded — a request would just get rate-limited, not billed.
+The free tier's license covers personal, non-commercial use, which this
+project fits.
 
 ## Tech stack
 
