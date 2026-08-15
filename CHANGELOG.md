@@ -5,6 +5,21 @@ All notable changes to this project are documented here. Versioning follows
 patch releases are fixes or copy changes, minor releases add
 backward-compatible features, and major releases break something.
 
+## 1.5.0 — 2026-08-15
+- Added a second, "speculative" tier of curated AI picks to the AI Investing
+  tab: 3 more themed batches (Emerging AI Software, AI Hardware & Robotics
+  Upstarts, AI in Specialized Industries) covering smaller, less-established,
+  considerably more volatile companies than the original "core" tier.
+  Displayed as a visually distinct row with its own risk warning; every
+  ticker was verified as actively trading before being added.
+
+## 1.4.0 — 2026-08-15
+- Added manual holding entry to the AI Investing tab: enter any ticker with
+  the price you actually paid, then use the existing "Refresh prices"
+  button to pull in the current price via Finnhub. Works alongside the
+  curated AI-picked batches, using the same tracking, persistence, and
+  refresh logic.
+
 ## 1.3.0 — 2026-08-15
 - Added a visible version number in the app header, sourced from
   `src/lib/version.ts`.

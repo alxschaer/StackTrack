@@ -164,6 +164,32 @@ export default function App() {
 
   const removeBatch = (id: string) => setBatches((prev) => prev.filter((b) => b.id !== id));
 
+  const addManualHolding = (ticker: string, name: string, pricePaid: number, amount: number) => {
+    const t = ticker.trim().toUpperCase();
+    if (!t || pricePaid <= 0 || amount <= 0) return;
+    const label = name.trim() || t;
+    setBatches((prev) => [
+      ...prev,
+      {
+        id: uid(),
+        theme: `${label} (your holding)`,
+        date: new Date().toISOString(),
+        totalInvested: amount,
+        picks: [
+          {
+            ticker: t,
+            name: label,
+            rationale: 'Manually added holding.',
+            allocation: amount,
+            entryPrice: pricePaid,
+            currentPrice: null,
+            lastUpdated: null,
+          },
+        ],
+      },
+    ]);
+  };
+
   const refreshPrices = async () => {
     if (!apiKey.trim()) return;
     setRefreshingPrices(true);
@@ -296,6 +322,7 @@ export default function App() {
             setApiKey={setApiKey}
             batches={batches}
             addBatch={addBatch}
+            addManualHolding={addManualHolding}
             removeBatch={removeBatch}
             refreshPrices={refreshPrices}
             refreshing={refreshingPrices}

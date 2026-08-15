@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshCw, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
+import { Plus, RefreshCw, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
 import type { TrackedBatch } from '../types';
 import { CURATED_BATCHES } from '../lib/curatedPicks';
 import { fmt0 } from '../lib/format';
@@ -10,6 +10,7 @@ interface Props {
   setApiKey: (key: string) => void;
   batches: TrackedBatch[];
   addBatch: (templateId: string, amount: number) => Promise<void>;
+  addManualHolding: (ticker: string, name: string, pricePaid: number, amount: number) => void;
   removeBatch: (id: string) => void;
   refreshPrices: () => Promise<void>;
   refreshing: boolean;
@@ -18,9 +19,33 @@ interface Props {
 
 const fmt2 = (n: number) => `$${(n || 0).toFixed(2)}`;
 
-export function AIInvestingTab({ apiKey, setApiKey, batches, addBatch, removeBatch, refreshPrices, refreshing, addingBatchId }: Props) {
+export function AIInvestingTab({
+  apiKey,
+  setApiKey,
+  batches,
+  addBatch,
+  addManualHolding,
+  removeBatch,
+  refreshPrices,
+  refreshing,
+  addingBatchId,
+}: Props) {
   const [amount, setAmount] = useState(100);
+  const [manualTicker, setManualTicker] = useState('');
+  const [manualName, setManualName] = useState('');
+  const [manualPrice, setManualPrice] = useState(0);
+  const [manualAmount, setManualAmount] = useState(0);
   const hasKey = apiKey.trim().length > 0;
+  const canAddManual = manualTicker.trim().length > 0 && manualPrice > 0 && manualAmount > 0;
+
+  const submitManualHolding = () => {
+    if (!canAddManual) return;
+    addManualHolding(manualTicker, manualName, manualPrice, manualAmount);
+    setManualTicker('');
+    setManualName('');
+    setManualPrice(0);
+    setManualAmount(0);
+  };
 
   const totals = batches.reduce(
     (acc, b) => {
@@ -39,9 +64,10 @@ export function AIInvestingTab({ apiKey, setApiKey, batches, addBatch, removeBat
         <div className="flex items-start gap-3">
           <Sparkles size={18} className="text-ledger-gold mt-0.5 shrink-0" />
           <p className="text-sm text-ledger-textSoft">
-            Picks below were curated by Claude as an illustrative AI-investing theme — large, well-known companies
-            grouped by an AI-relevant angle, not a live-generated or personalized recommendation. This is not
-            financial advice; do your own research before investing real money.
+            Picks below were curated by Claude as illustrative AI-investing themes, split into a "core" tier of
+            large, established companies and a "speculative" tier of smaller, more volatile ones — not a
+            live-generated or personalized recommendation either way. This is not financial advice; do your own
+            research before investing real money.
           </p>
         </div>
       </Card>
@@ -99,7 +125,6 @@ export function AIInvestingTab({ apiKey, setApiKey, batches, addBatch, removeBat
       )}
 
       <Card>
-        <h3 className="text-sm font-medium mb-3 text-ledger-textSoft">Add a batch of AI picks</h3>
         <div className="flex items-end gap-3 mb-4 flex-wrap">
           <Field label="Amount to invest">
             <div className="flex items-center gap-1">
@@ -115,8 +140,9 @@ export function AIInvestingTab({ apiKey, setApiKey, batches, addBatch, removeBat
           <span className="text-xs text-ledger-textFaint pb-2">split evenly across the 3 picks in whichever theme you choose</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {CURATED_BATCHES.map((template) => (
+        <h3 className="text-sm font-medium mb-2 text-ledger-textSoft">Core AI picks — large, established companies</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          {CURATED_BATCHES.filter((t) => t.riskTier === 'core').map((template) => (
             <div key={template.id} className="rounded-lg p-3 bg-ledger-surfaceAlt border border-ledger-borderSoft flex flex-col gap-2">
               <div className="text-sm font-medium text-ledger-text">{template.theme}</div>
               <div className="flex flex-col gap-1.5">
@@ -136,11 +162,99 @@ export function AIInvestingTab({ apiKey, setApiKey, batches, addBatch, removeBat
             </div>
           ))}
         </div>
+
+        <div className="flex items-start gap-2 mb-2 p-2 rounded-lg bg-ledger-rust/10 border border-ledger-rust/30">
+          <TriangleAlert size={14} className="text-ledger-rust mt-0.5 shrink-0" />
+          <p className="text-xs text-ledger-textSoft">
+            <b className="text-ledger-rust">Higher risk.</b> These are smaller, newer, or not-yet-profitable
+            companies — several have moved 20%+ in a single trading day this year. Much more volatile than the core
+            picks above; treat this as speculative, not a core holding.
+          </p>
+        </div>
+        <h3 className="text-sm font-medium mb-2 text-ledger-textSoft">Speculative AI picks — smaller, less established, more volatile</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {CURATED_BATCHES.filter((t) => t.riskTier === 'speculative').map((template) => (
+            <div key={template.id} className="rounded-lg p-3 bg-ledger-surfaceAlt border border-ledger-rust/30 flex flex-col gap-2">
+              <div className="text-sm font-medium text-ledger-text">{template.theme}</div>
+              <div className="flex flex-col gap-1.5">
+                {template.picks.map((p) => (
+                  <div key={p.ticker} className="text-xs text-ledger-textSoft">
+                    <span className="font-medium text-ledger-text">{p.ticker}</span> — {p.rationale}
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => void addBatch(template.id, amount)}
+                disabled={addingBatchId === template.id || amount <= 0}
+                className="mt-1 text-sm px-3 py-1.5 rounded-lg font-medium bg-ledger-rust text-[#1a0d0e] disabled:opacity-40"
+              >
+                {addingBatchId === template.id ? 'Adding…' : 'Track this batch'}
+              </button>
+            </div>
+          ))}
+        </div>
+
         {!hasKey && (
           <p className="text-xs mt-3 flex items-center gap-1.5 text-ledger-textFaint">
             <TriangleAlert size={13} /> Without an API key, batches are tracked with entry/current prices left blank.
           </p>
         )}
+      </Card>
+
+      <Card>
+        <h3 className="text-sm font-medium mb-1 text-ledger-textSoft">Add your own holding</h3>
+        <p className="text-xs mb-3 text-ledger-textFaint">
+          Already own something? Enter what you actually paid — that becomes the entry price used for gain/loss, same
+          as the AI-picked batches above.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
+          <Field label="Ticker">
+            <input
+              value={manualTicker}
+              onChange={(e) => setManualTicker(e.target.value.toUpperCase())}
+              placeholder="e.g. AAPL"
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Name (optional)">
+            <input
+              value={manualName}
+              onChange={(e) => setManualName(e.target.value)}
+              placeholder="e.g. Apple"
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Price you paid">
+            <div className="flex items-center gap-1">
+              <span className="text-sm text-ledger-textSoft">$</span>
+              <input
+                type="number"
+                step="0.01"
+                value={manualPrice || ''}
+                onChange={(e) => setManualPrice(Number(e.target.value) || 0)}
+                className={`${inputClass} tabular-nums`}
+              />
+            </div>
+          </Field>
+          <Field label="Amount invested">
+            <div className="flex items-center gap-1">
+              <span className="text-sm text-ledger-textSoft">$</span>
+              <input
+                type="number"
+                value={manualAmount || ''}
+                onChange={(e) => setManualAmount(Number(e.target.value) || 0)}
+                className={`${inputClass} tabular-nums`}
+              />
+            </div>
+          </Field>
+          <button
+            onClick={submitManualHolding}
+            disabled={!canAddManual}
+            className="flex items-center justify-center gap-1.5 text-sm px-3 py-1.5 rounded-lg font-medium bg-ledger-gold text-[#1a1408] disabled:opacity-40"
+          >
+            <Plus size={15} /> Add holding
+          </button>
+        </div>
       </Card>
 
       {batches.length === 0 ? (

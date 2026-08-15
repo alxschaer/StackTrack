@@ -49,6 +49,7 @@ export interface StockPickTemplate {
 export interface StockBatchTemplate {
   id: string;
   theme: string;
+  riskTier: 'core' | 'speculative';
   picks: StockPickTemplate[];
 }
 
