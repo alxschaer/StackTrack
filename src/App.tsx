@@ -127,6 +127,35 @@ export default function App() {
     setConfirmReset(false);
   };
 
+  const transferMoney = (
+    fromId: string,
+    toId: string | null,
+    amount: number,
+    newAccountName?: string,
+    newAccountCategory?: Account['category']
+  ) => {
+    if (amount <= 0) return;
+    setAccounts((prev) => {
+      let next = prev.map((a) => (a.id === fromId ? { ...a, balance: (Number(a.balance) || 0) - amount } : a));
+      if (toId) {
+        next = next.map((a) => (a.id === toId ? { ...a, balance: (Number(a.balance) || 0) + amount } : a));
+      } else if (newAccountName && newAccountCategory) {
+        next = [
+          ...next,
+          {
+            id: uid(),
+            name: newAccountName,
+            category: newAccountCategory,
+            balance: amount,
+            monthlyContribution: 0,
+            rate: catById(newAccountCategory).rate,
+          },
+        ];
+      }
+      return next;
+    });
+  };
+
   const addBatch = async (templateId: string, totalAmount: number) => {
     const template = CURATED_BATCHES.find((t) => t.id === templateId);
     if (!template || totalAmount <= 0) return;
@@ -283,6 +312,7 @@ export default function App() {
             addAccount={addAccount}
             updateAccount={updateAccount}
             removeAccount={removeAccount}
+            transferMoney={transferMoney}
             confirmReset={confirmReset}
             setConfirmReset={setConfirmReset}
             resetAll={resetAll}

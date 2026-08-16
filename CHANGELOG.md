@@ -5,6 +5,12 @@ All notable changes to this project are documented here. Versioning follows
 patch releases are fixes or copy changes, minor releases add
 backward-compatible features, and major releases break something.
 
+## 1.6.0 — 2026-08-15
+- Added a "Transfer between accounts" tool on the Accounts tab: move money
+  from one account into another existing one, or spin off a brand-new
+  account funded from an existing one (e.g. buying $500 of a stock with
+  money from checking) — both balances update in a single action.
+
 ## 1.5.0 — 2026-08-15
 - Added a second, "speculative" tier of curated AI picks to the AI Investing
   tab: 3 more themed batches (Emerging AI Software, AI Hardware & Robotics
