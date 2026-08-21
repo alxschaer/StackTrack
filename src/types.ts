@@ -44,12 +44,16 @@ export interface StockPickTemplate {
   ticker: string;
   name: string;
   rationale: string;
+  analysis: string;
+  analystTargetPrice: number;
 }
 
 export interface StockBatchTemplate {
   id: string;
   theme: string;
   riskTier: 'core' | 'speculative';
+  curatedDate: string;
+  targetPriceAsOf: string;
   picks: StockPickTemplate[];
 }
 

@@ -5,6 +5,14 @@ All notable changes to this project are documented here. Versioning follows
 patch releases are fixes or copy changes, minor releases add
 backward-compatible features, and major releases break something.
 
+## 1.7.0 — 2026-08-17
+- Added deeper per-pick analysis (2-3 sentences instead of one line), a
+  curated date per batch, and a real, sourced Wall Street analyst
+  consensus price target for every stock in the AI Investing tab.
+- Added a "Check current vs. target" button per batch that fetches today's
+  live price via Finnhub and shows it next to the target with a % upside
+  figure, before you commit to tracking it.
+
 ## 1.6.1 — 2026-08-15
 - Reworked both curated pick tiers to be genuinely diversified across
   sectors (healthcare, consumer staples, financials, retail, energy,

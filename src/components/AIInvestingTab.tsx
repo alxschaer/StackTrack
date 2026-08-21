@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Plus, RefreshCw, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
-import type { TrackedBatch } from '../types';
+import type { TrackedBatch, StockBatchTemplate } from '../types';
 import { CURATED_BATCHES } from '../lib/curatedPicks';
+import { fetchQuote } from '../lib/market';
 import { fmt0 } from '../lib/format';
 import { Card, Field, inputClass } from './ui';
 
@@ -35,6 +36,8 @@ export function AIInvestingTab({
   const [manualName, setManualName] = useState('');
   const [manualPrice, setManualPrice] = useState(0);
   const [manualAmount, setManualAmount] = useState(0);
+  const [previewPrices, setPreviewPrices] = useState<Record<string, number>>({});
+  const [checkingBatchId, setCheckingBatchId] = useState<string | null>(null);
   const hasKey = apiKey.trim().length > 0;
   const canAddManual = manualTicker.trim().length > 0 && manualPrice > 0 && manualAmount > 0;
 
@@ -45,6 +48,30 @@ export function AIInvestingTab({
     setManualName('');
     setManualPrice(0);
     setManualAmount(0);
+  };
+
+  const checkPreviewPrices = async (templateId: string, tickers: string[]) => {
+    if (!hasKey) return;
+    setCheckingBatchId(templateId);
+    const key = apiKey.trim();
+    const results = await Promise.all(
+      tickers.map(async (ticker) => {
+        try {
+          const { price } = await fetchQuote(ticker, key);
+          return [ticker, price] as const;
+        } catch {
+          return [ticker, null] as const;
+        }
+      })
+    );
+    setPreviewPrices((prev) => {
+      const next = { ...prev };
+      results.forEach(([ticker, price]) => {
+        if (price !== null) next[ticker] = price;
+      });
+      return next;
+    });
+    setCheckingBatchId(null);
   };
 
   const totals = batches.reduce(
@@ -143,23 +170,18 @@ export function AIInvestingTab({
         <h3 className="text-sm font-medium mb-2 text-ledger-textSoft">Core AI picks — large, established companies</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
           {CURATED_BATCHES.filter((t) => t.riskTier === 'core').map((template) => (
-            <div key={template.id} className="rounded-lg p-3 bg-ledger-surfaceAlt border border-ledger-borderSoft flex flex-col gap-2">
-              <div className="text-sm font-medium text-ledger-text">{template.theme}</div>
-              <div className="flex flex-col gap-1.5">
-                {template.picks.map((p) => (
-                  <div key={p.ticker} className="text-xs text-ledger-textSoft">
-                    <span className="font-medium text-ledger-text">{p.ticker}</span> — {p.rationale}
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => void addBatch(template.id, amount)}
-                disabled={addingBatchId === template.id || amount <= 0}
-                className="mt-1 text-sm px-3 py-1.5 rounded-lg font-medium bg-ledger-gold text-[#1a1408] disabled:opacity-40"
-              >
-                {addingBatchId === template.id ? 'Adding…' : 'Track this batch'}
-              </button>
-            </div>
+            <TemplateCard
+              key={template.id}
+              template={template}
+              amount={amount}
+              addBatch={addBatch}
+              addingBatchId={addingBatchId}
+              previewPrices={previewPrices}
+              checkingBatchId={checkingBatchId}
+              checkPreviewPrices={checkPreviewPrices}
+              hasKey={hasKey}
+              accent="gold"
+            />
           ))}
         </div>
 
@@ -174,28 +196,28 @@ export function AIInvestingTab({
         <h3 className="text-sm font-medium mb-2 text-ledger-textSoft">Speculative AI picks — smaller, less established, more volatile</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {CURATED_BATCHES.filter((t) => t.riskTier === 'speculative').map((template) => (
-            <div key={template.id} className="rounded-lg p-3 bg-ledger-surfaceAlt border border-ledger-rust/30 flex flex-col gap-2">
-              <div className="text-sm font-medium text-ledger-text">{template.theme}</div>
-              <div className="flex flex-col gap-1.5">
-                {template.picks.map((p) => (
-                  <div key={p.ticker} className="text-xs text-ledger-textSoft">
-                    <span className="font-medium text-ledger-text">{p.ticker}</span> — {p.rationale}
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => void addBatch(template.id, amount)}
-                disabled={addingBatchId === template.id || amount <= 0}
-                className="mt-1 text-sm px-3 py-1.5 rounded-lg font-medium bg-ledger-rust text-[#1a0d0e] disabled:opacity-40"
-              >
-                {addingBatchId === template.id ? 'Adding…' : 'Track this batch'}
-              </button>
-            </div>
+            <TemplateCard
+              key={template.id}
+              template={template}
+              amount={amount}
+              addBatch={addBatch}
+              addingBatchId={addingBatchId}
+              previewPrices={previewPrices}
+              checkingBatchId={checkingBatchId}
+              checkPreviewPrices={checkPreviewPrices}
+              hasKey={hasKey}
+              accent="rust"
+            />
           ))}
         </div>
 
+        <p className="text-xs mt-3 text-ledger-textFaint">
+          "Target" is a real Wall Street analyst consensus 12-month price target, sourced when each batch was
+          curated — not a Claude prediction, and not a guarantee; these change often and analysts are frequently
+          wrong. Click "Check current vs. target" (needs your API key) to see today's live price alongside it.
+        </p>
         {!hasKey && (
-          <p className="text-xs mt-3 flex items-center gap-1.5 text-ledger-textFaint">
+          <p className="text-xs mt-1 flex items-center gap-1.5 text-ledger-textFaint">
             <TriangleAlert size={13} /> Without an API key, batches are tracked with entry/current prices left blank.
           </p>
         )}
@@ -316,6 +338,88 @@ export function AIInvestingTab({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function TemplateCard({
+  template,
+  amount,
+  addBatch,
+  addingBatchId,
+  previewPrices,
+  checkingBatchId,
+  checkPreviewPrices,
+  hasKey,
+  accent,
+}: {
+  template: StockBatchTemplate;
+  amount: number;
+  addBatch: (templateId: string, amount: number) => Promise<void>;
+  addingBatchId: string | null;
+  previewPrices: Record<string, number>;
+  checkingBatchId: string | null;
+  checkPreviewPrices: (templateId: string, tickers: string[]) => Promise<void>;
+  hasKey: boolean;
+  accent: 'gold' | 'rust';
+}) {
+  const buttonClass = accent === 'gold' ? 'bg-ledger-gold text-[#1a1408]' : 'bg-ledger-rust text-[#1a0d0e]';
+  const borderClass = accent === 'gold' ? 'border-ledger-borderSoft' : 'border-ledger-rust/30';
+
+  return (
+    <div className={`rounded-lg p-3 bg-ledger-surfaceAlt border ${borderClass} flex flex-col gap-2`}>
+      <div>
+        <div className="text-sm font-medium text-ledger-text">{template.theme}</div>
+        <div className="text-xs text-ledger-textFaint">
+          Curated {new Date(template.curatedDate).toLocaleDateString()} · targets as of {template.targetPriceAsOf}
+        </div>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        {template.picks.map((p) => {
+          const current = previewPrices[p.ticker];
+          const upside = current !== undefined ? ((p.analystTargetPrice - current) / current) * 100 : null;
+          return (
+            <div key={p.ticker} className="text-xs text-ledger-textSoft border-t border-ledger-borderSoft pt-2 first:border-t-0 first:pt-0">
+              <div>
+                <span className="font-medium text-ledger-text">{p.ticker}</span> · {p.name}
+              </div>
+              <p className="mt-0.5 text-ledger-textFaint">{p.analysis}</p>
+              <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 mt-1 tabular-nums">
+                <span>Target {fmt2(p.analystTargetPrice)}</span>
+                {current !== undefined && (
+                  <>
+                    <span>Now {fmt2(current)}</span>
+                    <span className={upside !== null && upside >= 0 ? 'text-ledger-sage' : 'text-ledger-rust'}>
+                      {upside !== null ? `${upside >= 0 ? '+' : ''}${upside.toFixed(0)}% to target` : ''}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex gap-2 mt-1 flex-wrap">
+        <button
+          onClick={() =>
+            void checkPreviewPrices(
+              template.id,
+              template.picks.map((p) => p.ticker)
+            )
+          }
+          disabled={!hasKey || checkingBatchId === template.id}
+          className="text-xs px-2.5 py-1.5 rounded-lg border border-ledger-border text-ledger-textSoft disabled:opacity-40"
+        >
+          {checkingBatchId === template.id ? 'Checking…' : 'Check current vs. target'}
+        </button>
+        <button
+          onClick={() => void addBatch(template.id, amount)}
+          disabled={addingBatchId === template.id || amount <= 0}
+          className={`text-sm px-3 py-1.5 rounded-lg font-medium disabled:opacity-40 ${buttonClass}`}
+        >
+          {addingBatchId === template.id ? 'Adding…' : 'Track this batch'}
+        </button>
+      </div>
     </div>
   );
 }
